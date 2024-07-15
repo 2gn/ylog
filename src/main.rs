@@ -1,9 +1,9 @@
+use chrono::prelude::*;
 use std::{fs::File, io::Write};
 
 fn main() {
     let my_qso = QSO {
-        date: String::from("2016-04-23"),
-        time: String::from("21:53"),
+        datetime: Utc::now(),
         band: String::from("50"),
         mode: String::from("SSB"),
         callsign: String::from("JA1YXP"),
@@ -31,10 +31,12 @@ fn write_logsheet(data: Vec<QSO>) {
 }
 
 fn format_qso(qso: QSO) -> String {
+    let date = qso.datetime.format("%Y-%m-%d").to_string();
+    let time = qso.datetime.format("%H:%M").to_string();
     format!(
         "{} {} {} {} {} {} {} {} {} {} {}",
-        qso.date,
-        qso.time,
+        date,
+        time,
         qso.band,
         qso.mode,
         qso.callsign,
@@ -48,8 +50,7 @@ fn format_qso(qso: QSO) -> String {
 }
 
 struct QSO {
-    date: String,
-    time: String,
+    datetime: DateTime<Utc>,
     band: String,
     mode: String,
     callsign: String,
