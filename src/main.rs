@@ -1,24 +1,15 @@
 use chrono::prelude::*;
 use std::{fs::File, io::Write};
 
-fn main() {
-    let my_qso = QSO {
-        datetime: Utc::now(),
-        band: String::from("50"),
-        mode: String::from("SSB"),
-        callsign: String::from("JA1YXP"),
-        sent_rst: String::from("59"),
-        sent_num: String::from("13M"),
-        recv_rst: String::from("59"),
-        recv_num: String::from("20M"),
-        multi: String::from("20"),
-        score: String::from("1"),
-    };
-    write_logsheet(vec![my_qso]);
-}
+#[macro_use]
+extern crate rocket;
 
-fn _append_to_logsheet(mut file: &File, data: &str) {
-    file.write(data.as_bytes()).expect("Failed to write data");
+#[post("/putqso")]
+async fn putqso() {}
+
+#[get("/webui")]
+async fn webui() -> &'static str {
+    "TODO"
 }
 
 fn write_logsheet(data: Vec<QSO>) {
@@ -28,6 +19,37 @@ fn write_logsheet(data: Vec<QSO>) {
         _append_to_logsheet(&file, format_qso(qso).as_str())
     }
     _append_to_logsheet(&file, "\n</LOGSHEET>\n")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_write_logsheet() {
+        let my_qso = super::QSO {
+            datetime: super::Utc::now(),
+            band: String::from("50"),
+            mode: String::from("SSB"),
+            callsign: String::from("JA1YXP"),
+            sent_rst: String::from("59"),
+            sent_num: String::from("13M"),
+            recv_rst: String::from("59"),
+            recv_num: String::from("20M"),
+            multi: String::from("20"),
+            score: 2,
+        };
+        super::write_logsheet(vec![my_qso]);
+    }
+}
+
+#[launch]
+fn rocket() -> _ {
+    rocket::build()
+        .mount("/putqso", routes![putqso])
+        .mount("/webui", routes![webui])
+}
+
+fn _append_to_logsheet(mut file: &File, data: &str) {
+    file.write(data.as_bytes()).expect("Failed to write data");
 }
 
 fn format_qso(qso: QSO) -> String {
@@ -59,5 +81,5 @@ struct QSO {
     recv_rst: String,
     recv_num: String,
     multi: String,
-    score: String,
+    score: i32,
 }
