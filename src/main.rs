@@ -1,16 +1,16 @@
 use chrono::prelude::*;
-use std::{fs::File, io::Write};
-
-#[macro_use]
-extern crate rocket;
-
-#[post("/putqso")]
-async fn putqso() {}
-
-#[get("/webui")]
-async fn webui() -> &'static str {
-    "TODO"
-}
+use html::form;
+use icondata::{AiCloseOutlined, AiSendOutlined, LuPencil};
+use leptos::*;
+use leptos_use::*;
+use mobile::{show_toast, ToastOptions};
+use std::net::TcpListener;
+use std::thread::spawn;
+use std::time::Duration;
+use std::{fmt::format, fs::File, io::Write};
+use svg::view;
+use thaw::*;
+use tungstenite::accept;
 
 fn write_logsheet(data: Vec<QSO>) {
     let file = File::create("logsheet.txt").expect("Unable to create file");
@@ -19,6 +19,198 @@ fn write_logsheet(data: Vec<QSO>) {
         _append_to_logsheet(&file, format_qso(qso).as_str())
     }
     _append_to_logsheet(&file, "\n</LOGSHEET>\n")
+}
+
+#[component]
+fn TableView() -> impl IntoView {
+    let mut callsigns = vec![
+        "JA1YXP", "JA1ZGP", "JA1ZGP", "JA1ZGP", "JA1ZGP", "JA1ZGP", "JA1ZGP", "JA1ZGP", "JA1ZGP",
+    ];
+
+    view! {
+        <Scrollbar style="max-height: 70vh">
+            <div style="min-height: 100vh">
+                <Table>
+                    <thead>
+                        <tr>
+                            <th>"Time"</th>
+                            <th>"Callsign"</th>
+                            <th>"Number"</th>
+                            <th>"Mode"</th>
+                            <th>"Operator"</th>
+                            <th>"Modification"</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {callsigns.into_iter()
+                            .map(|callsign| view! {
+                                <tr>
+                                    <td>"2023-10-08"</td>
+                                    <td>{callsign}</td>
+                                    <td>"13M"</td>
+                                    <td>"SSB"</td>
+                                    <td>"Alex"</td>
+                                    <td>
+                                        <Space>
+                                            <Button icon=LuPencil></Button>
+                                            <Button color=ButtonColor::Error icon=AiCloseOutlined circle=true></Button>
+                                        </Space>
+                                    </td>
+                                </tr>
+                            })
+                            .collect::<Vec<_>>()}
+                    </tbody>
+                </Table>
+            </div>
+        </Scrollbar>
+    }
+}
+
+#[component]
+fn CWKeyboard() -> impl IntoView {
+    let onclick = move |_| {
+        show_toast(ToastOptions {
+            message: format!("QSO have been submitted"),
+            duration: Duration::from_millis(2000),
+        });
+    };
+    let band = create_rw_signal(String::from("50"));
+    let callsign = create_rw_signal(String::from("JA1YXP"));
+    let recv_num = create_rw_signal(String::from("13M"));
+
+    let modes = vec![
+        SelectOption::new("SSB", String::from("SSB")),
+        SelectOption::new("CW", String::from("CW")),
+        SelectOption::new("FM", String::from("FM")),
+        SelectOption::new("RTTY", String::from("RTTY")),
+    ];
+    let mode = create_rw_signal(None::<String>);
+    view! {
+        <div style="min-width: 70vw">
+            <Card>
+                <Space >
+                    <Input value=band/>
+                    <Select value=mode options=modes/>
+                    <Input value=callsign/>
+                    <Input value=recv_num/>
+                    <Button on_click=onclick variant=ButtonVariant::Primary>"Submit"</Button>
+                </Space>
+            </Card>
+        </div>
+    }
+}
+
+#[component]
+pub fn Dashboard() -> impl IntoView {
+    let percentage = create_rw_signal(0.0f32);
+    view! {
+        <Space>
+            <ProgressCircle percentage/>
+            <ProgressCircle percentage color=ProgressColor::Success/>
+            <ProgressCircle percentage color=ProgressColor::Warning/>
+            <ProgressCircle percentage color=ProgressColor::Error/>
+        </Space>
+    }
+}
+
+#[component]
+fn Message() -> impl IntoView {
+    let UseWebsocketReturn {
+        ready_state,
+        message,
+        message_bytes,
+        send,
+        send_bytes,
+        open,
+        close,
+        ..
+    } = use_websocket("wss://127.0.0.1");
+    open();
+    let status = move || ready_state.get().to_string();
+    let send_message = move |_| {
+        send(
+            // format!(
+            //     "{}\nHello, world!",
+            //     message.get().expect("Failed getting message").as_str()
+            // )
+            // .as_str(),
+            "Hello, World!",
+        );
+    };
+    view! {
+        <Space vertical=true>
+            {status}
+            <Card>
+                <div style="min-height: 73vh; min-width: 20vw">
+                    <p>{move || format!("{:?}", message.get())}</p>
+                </div>
+            </Card>
+            <Card>
+                <Space>
+                    <Input />
+                    <Button icon=AiSendOutlined on_click=send_message></Button>
+                </Space>
+            </Card>
+        </Space>
+    }
+}
+
+#[component]
+pub fn App() -> impl IntoView {
+    let dark_mode = create_rw_signal(false);
+    let value = create_rw_signal(String::from("sheet"));
+    let theme = create_rw_signal(Theme::light());
+    let on_change = move |value: bool| {
+        if value {
+            theme.set(Theme::dark())
+        } else {
+            theme.set(Theme::light())
+        }
+    };
+    view! {
+        <ThemeProvider theme>
+            <Space vertical=true>
+                <Card>
+                    <Space>
+                        <div style="margin-left: auto">
+                            <Switch value=dark_mode on_change />
+                        </div>
+                    </Space>
+                </Card>
+                <Space>
+                    <Message />
+                    <Tabs value>
+                        <Tab key="sheet" label="Sheet">
+                            <Space vertical=true>
+                                <TableView />
+                                <CWKeyboard />
+                            </Space>
+                        </Tab>
+                        <Tab key="dash" label="Dashboard">
+                            <Dashboard />
+                        </Tab>
+                    </Tabs>
+                </Space>
+            </Space>
+        </ThemeProvider>
+    }
+}
+
+fn main() {
+    mount_to_body(App);
+    let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+    for stream in server.incoming() {
+        spawn(move || {
+            let mut websocket = accept(stream.unwrap()).unwrap();
+            loop {
+                let msg = websocket.read().unwrap();
+                if msg.is_text() {
+                    let msg = msg.to_text().unwrap();
+                    websocket.write(msg.into()).unwrap();
+                }
+            }
+        });
+    }
 }
 
 #[cfg(test)]
@@ -39,13 +231,6 @@ mod tests {
         };
         super::write_logsheet(vec![my_qso]);
     }
-}
-
-#[launch]
-fn rocket() -> _ {
-    rocket::build()
-        .mount("/putqso", routes![putqso])
-        .mount("/webui", routes![webui])
 }
 
 fn _append_to_logsheet(mut file: &File, data: &str) {
