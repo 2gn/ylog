@@ -4,13 +4,18 @@ use icondata::{AiCloseOutlined, AiSendOutlined, LuPencil};
 use leptos::*;
 use leptos_use::*;
 use mobile::{show_toast, ToastOptions};
+use std::borrow::BorrowMut;
 use std::net::TcpListener;
 use std::thread::spawn;
 use std::time::Duration;
 use std::{fmt::format, fs::File, io::Write};
 use svg::view;
 use thaw::*;
-use tungstenite::accept;
+use tungstenite::{
+    accept, accept_hdr,
+    handshake::server::{Request, Response},
+};
+use web_sys::js_sys::Reflect::apply;
 
 fn write_logsheet(data: Vec<QSO>) {
     let file = File::create("logsheet.txt").expect("Unable to create file");
@@ -69,6 +74,19 @@ fn TableView() -> impl IntoView {
 #[component]
 fn CWKeyboard() -> impl IntoView {
     let onclick = move |_| {
+        write_logsheet(vec![QSO {
+            datetime: Utc::now(),
+            band: String::from("50"),
+            mode: String::from("SSB"),
+            callsign: String::from("JA1YXP"),
+            sent_rst: String::from("59"),
+            sent_num: String::from("13M"),
+            recv_rst: String::from("59"),
+            recv_num: String::from("20M"),
+            multi: String::from("20"),
+            score: 2,
+        }]);
+
         show_toast(ToastOptions {
             message: format!("QSO have been submitted"),
             duration: Duration::from_millis(2000),
@@ -124,31 +142,25 @@ fn Message() -> impl IntoView {
         open,
         close,
         ..
-    } = use_websocket("wss://127.0.0.1");
+    } = use_websocket("ws://127.0.0.1/message");
     open();
+    let mut msgs: Vec<&str> = vec!["Message server started"];
     let status = move || ready_state.get().to_string();
-    let send_message = move |_| {
-        send(
-            // format!(
-            //     "{}\nHello, world!",
-            //     message.get().expect("Failed getting message").as_str()
-            // )
-            // .as_str(),
-            "Hello, World!",
-        );
-    };
+    let send_message = {};
     view! {
         <Space vertical=true>
             {status}
             <Card>
                 <div style="min-height: 73vh; min-width: 20vw">
-                    <p>{move || format!("{:?}", message.get())}</p>
+                    {msgs.into_iter().map(|msg| view! {
+                        <div>{msg}</div>
+                    }).collect::<Vec<_>>()}
                 </div>
             </Card>
             <Card>
                 <Space>
                     <Input />
-                    <Button icon=AiSendOutlined on_click=send_message></Button>
+                    <Button icon=AiSendOutlined ></Button>
                 </Space>
             </Card>
         </Space>
@@ -199,9 +211,26 @@ pub fn App() -> impl IntoView {
 fn main() {
     mount_to_body(App);
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+    logging::log!("Setting up the server");
     for stream in server.incoming() {
         spawn(move || {
-            let mut websocket = accept(stream.unwrap()).unwrap();
+            let callback = |req: &Request, mut response: Response| {
+                logging::log!("Received a new ws handshake");
+                logging::log!("The request's path is: {}", req.uri().path());
+                logging::log!("The request's headers are:");
+                for (ref header, _value) in req.headers() {
+                    logging::log!("* {}", header);
+                }
+
+                // Let's add an additional header to our response to the client.
+                let headers = response.headers_mut();
+                headers.append("MyCustomHeader", ":)".parse().unwrap());
+                headers.append("SOME_TUNGSTENITE_HEADER", "header_value".parse().unwrap());
+
+                Ok(response)
+            };
+            logging::log!("Received a new ws handshake");
+            let mut websocket = accept_hdr(stream.unwrap(), callback).unwrap();
             loop {
                 let msg = websocket.read().unwrap();
                 if msg.is_text() {

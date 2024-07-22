@@ -9,4 +9,4 @@ This project is a work-in-progress. Active development is done on [dev branch](h
 You need to follow the format [specified by JARL](https://www.jarl.org/Japanese/1_Tanoshimo/1-1_Contest/e-log.htm)
 
 ## TODO
-- [ ] Create WebUI using [leptos](https://github.com/leptos-rs/leptos)
+- [] Communicate with clients using WebSocket
