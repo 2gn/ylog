@@ -10,3 +10,4 @@ You need to follow the format [specified by JARL](https://www.jarl.org/Japanese/
 
 ## TODO
 - [] Communicate with clients using WebSocket
+- [] Create a vim client
